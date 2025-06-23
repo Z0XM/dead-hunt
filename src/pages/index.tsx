@@ -6,8 +6,6 @@ import Red from "@/components/utils/Red";
 import White from "@/components/utils/White";
 import Yellow from "@/components/utils/Yellow";
 import useTerminal from "@/hooks/terminal.hook";
-import { api } from "@/utils/api";
-import { useClerk, useUser } from "@clerk/nextjs";
 import { type NextPage } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -85,19 +83,7 @@ const DIRECTORIES: any = {
 };
 
 const Home: NextPage = () => {
-  const { signOut } = useClerk();
-  const clerkUser = useUser();
   const router = useRouter();
-
-  const leaderboardQuery = api.user.getLeaderboard.useQuery();
-
-  const profileQuery = api.user.get.useQuery({
-    email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-  });
-  const rankQuery = api.user.getRank.useQuery({
-    email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-  });
-  const saveGameMutation = api.user.saveGame.useMutation();
 
   const terminalActions = useTerminal({
     initialValue: [
@@ -129,21 +115,6 @@ const Home: NextPage = () => {
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  if (
-    !clerkUser.isLoaded
-    // profileQuery.isLoading ||
-    // profileQuery.isFetching ||
-    // rankQuery.isLoading ||
-    // rankQuery.isFetching ||
-    // leaderboardQuery.isLoading ||
-    // leaderboardQuery.isFetching
-  )
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <Loading />
-      </div>
-    );
-
   const showVirusLevel = (currLevel: number) => {
     setVirusLevel(currLevel);
     addTerminalItem(
@@ -164,12 +135,6 @@ const Home: NextPage = () => {
         </div>
       );
       addTerminalItem(<Green>====== Game Over =====</Green>);
-      saveGameMutation.mutate({
-        virusLevel: currLevel,
-        email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-        increment: gameLevel * 100 - Math.floor((currLevel * 100) / virusLimit),
-        levelCleared: gameLevel,
-      });
     }
   };
 
@@ -188,20 +153,8 @@ const Home: NextPage = () => {
           <Green>2-</Green> `<White>clear</White>` <Green>-&gt;</Green> Clears
           the terminal.
           <br />
-          <Green>3-</Green> `<White>logout</White>` <Green>-&gt;</Green> Logs
-          you out of the app.
-          <br />
-          <Green>4-</Green> `<White>leaderboard</White>` <Green>-&gt;</Green>{" "}
-          Displays the leaderboard.
-          <br />
-          <Green>5-</Green> `<White>rank</White>` <Green>-&gt;</Green> Displays
-          your rank
-          <br />
-          <Green>6-</Green> `<White>play</White>` <Green>-&gt;</Green> Start
+          <Green>3-</Green> `<White>play</White>` <Green>-&gt;</Green> Start
           your game!
-          <br />
-          <Green>7-</Green> `<White>visit [email]</White>` <Green>-&gt;</Green>{" "}
-          visit a user&apos;s profile [Admin Only Command]
           <br />
         </div>
       );
@@ -210,35 +163,10 @@ const Home: NextPage = () => {
       clearTerminal();
     },
     "": async () => {},
-    logout: async () => {
-      await signOut();
-    },
-    rank: async () => {
-      const { data: rank, isSuccess } = await rankQuery.refetch();
-      if (isSuccess)
-        addTerminalItem(
-          <div>
-            Your Rank: <Green>{rank}</Green>
-          </div>
-        );
-    },
     restart: async () => {
       clearTerminal();
-      const profile = await profileQuery.refetch();
-      if (!profile.isSuccess) return;
-      addTerminalItem(
-        <Green>
-          ====== Restarting Game - Previous Score({profile.data.score}) =====
-        </Green>
-      );
       setGameLevel(0);
       setPWD("");
-      saveGameMutation.mutate({
-        virusLevel: 1,
-        email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-        increment: -profile.data.score,
-        levelCleared: 0,
-      });
       setAppState("game");
       setMapFileOpened({ one: false, two: false });
       addTerminalItem(
@@ -290,47 +218,12 @@ const Home: NextPage = () => {
     },
     play: async () => {
       clearTerminal();
-      const profile = await profileQuery.refetch();
-      if (!profile.isSuccess) return;
-      let actualVirusLevel = 1;
-      let actualLevelCleared = 0;
-      if (profile.data.levelCleared >= 6) {
-        addTerminalItem(
-          <div>
-            <White>
-              You have already cleared all levels. Your score ={" "}
-              {profile.data.score}
-            </White>
-            <br />
-            Use `restart` to play again.
-          </div>
-        );
-        return;
-      } else if (profile.data.virusLevel === virusLimit) {
-        addTerminalItem(
-          <Green>
-            ====== Restarting Game - Previous Score({profile.data.score}) =====
-          </Green>
-        );
-        setGameLevel(0);
-        setMapFileOpened({ one: false, two: false });
-        setPWD("");
-        saveGameMutation.mutate({
-          virusLevel: 1,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: -profile.data.score,
-          levelCleared: 0,
-        });
-      } else {
-        addTerminalItem(
-          <Green>
-            ====== Game Started - Level: {profile.data.levelCleared} =====
-          </Green>
-        );
-        setGameLevel(profile.data.levelCleared);
-        actualLevelCleared = profile.data.levelCleared;
-        actualVirusLevel = profile.data.virusLevel;
-      }
+      const actualVirusLevel = 1;
+      const actualLevelCleared = 0;
+      addTerminalItem(
+        <Green>====== Game Started - Level: {actualLevelCleared} =====</Green>
+      );
+      setGameLevel(actualLevelCleared);
       setAppState("game");
       if (actualLevelCleared === 0) {
         addTerminalItem(
@@ -380,47 +273,6 @@ const Home: NextPage = () => {
         );
       }
       showVirusLevel(actualVirusLevel);
-    },
-    leaderboard: async () => {
-      const { data: users, isSuccess } = await leaderboardQuery.refetch();
-      if (isSuccess)
-        addTerminalItem(
-          <p>
-            <div className="text-underline w-full text-center">
-              ========== <Yellow>Leaderboard</Yellow> ==========
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>
-                    <White>Rank</White>
-                  </th>
-                  <th className="px-8">
-                    <White>Email</White>
-                  </th>
-                  <th>
-                    <White>Score</White>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user, i) => {
-                  return (
-                    <tr key={i}>
-                      <td>{i}.</td>
-                      <td className="px-8">
-                        <White>{user.email}</White>
-                      </td>
-                      <td className="text-end">
-                        <Green>{user.score}</Green>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </p>
-        );
     },
   };
 
@@ -518,12 +370,6 @@ const Home: NextPage = () => {
       if (pwd === "" && cmd.split(" ")[1] === "-a" && gameLevel < 4) {
         setGameLevel(4);
         addTerminalItem(<Green>====== Level 4 Cleared =====</Green>);
-        saveGameMutation.mutate({
-          virusLevel: virusLevel,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: 400 - Math.floor((virusLevel * 100) / virusLimit),
-          levelCleared: 4,
-        });
       }
       if (currPath.type === "folder")
         addTerminalItem(
@@ -589,12 +435,6 @@ const Home: NextPage = () => {
       if (newPath.split("/")[0] === "home" && gameLevel === 0) {
         setGameLevel(1);
         addTerminalItem(<Green>====== Level 1 Cleared =====</Green>);
-        saveGameMutation.mutate({
-          virusLevel: virusLevel,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: 100 - Math.floor((virusLevel * 100) / virusLimit),
-          levelCleared: 1,
-        });
       }
       if (newPath === "home/virus") {
         showVirusLevel(virusLevel + 1);
@@ -647,12 +487,6 @@ const Home: NextPage = () => {
         addTerminalItem(
           <Green>====== Level {newGameLevel} Cleared =====</Green>
         );
-        saveGameMutation.mutate({
-          virusLevel: virusLevel,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: 200 - Math.floor((virusLevel * 100) / virusLimit),
-          levelCleared: newGameLevel,
-        });
       } else if (
         filePath === "home/virus/openMe!/0000000000100010.txt" &&
         gameLevel < 3 &&
@@ -664,12 +498,6 @@ const Home: NextPage = () => {
         addTerminalItem(
           <Green>====== Level {newGameLevel} Cleared =====</Green>
         );
-        saveGameMutation.mutate({
-          virusLevel: virusLevel,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: 200 - Math.floor((virusLevel * 100) / virusLimit),
-          levelCleared: newGameLevel,
-        });
       }
 
       addTerminalItem(
@@ -714,12 +542,6 @@ const Home: NextPage = () => {
       if (filePath === ".solution.txt" && gameLevel < 5) {
         setGameLevel(5);
         addTerminalItem(<Green>====== Level 5 Cleared =====</Green>);
-        saveGameMutation.mutate({
-          virusLevel: virusLevel,
-          email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-          increment: 300 - Math.floor((virusLevel * 100) / virusLimit),
-          levelCleared: 5,
-        });
       }
 
       addTerminalItem(
@@ -733,12 +555,6 @@ const Home: NextPage = () => {
     avadakedavra: async () => {
       setGameLevel(6);
 
-      saveGameMutation.mutate({
-        virusLevel: virusLevel,
-        email: clerkUser.user!.primaryEmailAddress!.emailAddress,
-        increment: 400 - Math.floor((virusLevel * 100) / virusLimit),
-        levelCleared: 6,
-      });
       addTerminalItem(
         <div>
           <Green>====== Level 6 Cleared =====</Green>
@@ -776,13 +592,7 @@ const Home: NextPage = () => {
               addInputItem(value);
               addTerminalItem(value);
               if (!defaultCommandsMap[value]) {
-                const mainCmd = value.split(" ")[0]!;
-                if (
-                  clerkUser.user?.publicMetadata.isAdmin &&
-                  adminCommandsMap[mainCmd]
-                ) {
-                  adminCommandsMap[mainCmd]!(value);
-                } else addTerminalError("Command not found :/ . Use `help`. ");
+                addTerminalError("Command not found :/ . Use `help`. ");
               } else defaultCommandsMap[value]!();
             },
             game: async (e, value) => {
